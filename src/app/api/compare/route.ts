@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { supabaseServerClient } from "@/lib/supabaseServer";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 type Tone = "serious" | "balanced" | "chaotic";
+type Mode = "basic" | "expert";
 
 type ComparisonResult = {
   summary: string;
@@ -26,17 +28,22 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const {
-      itemA,
-      itemB,
-      criteria,
-      tone,
-    } = body as {
-      itemA: string;
-      itemB: string;
-      criteria?: string;
-      tone?: Tone;
-    };
+        const {
+        itemA,
+        itemB,
+        criteria,
+        tone,
+        templateKey,
+        mode,
+        } = body as {
+        itemA: string;
+        itemB: string;
+        criteria?: string;
+        tone?: Tone;
+        templateKey?: string;
+        mode?: string;
+        };
+
 
     if (!itemA || !itemB) {
       return NextResponse.json(
@@ -44,6 +51,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const detailMode: Mode = mode === "expert" ? "expert" : "basic";
 
     const toneInstruction =
       tone === "chaotic"
@@ -76,14 +85,22 @@ type ComparisonResult = {
   funTitle: string;
 };
 
+There are two detail modes:
+- "basic": keep things concise and high level (shorter summary, 3–4 aspects, 3–5 bullets per pros/cons).
+- "expert": go deeper with more nuance (richer summary, 5–7 aspects where appropriate, more detailed pros/cons),
+  but ALWAYS keep the same JSON structure and field names.
+
 Rules:
 - Do NOT include backticks or markdown.
 - Do NOT add commentary before or after the JSON.
 - Make sure the JSON is valid and parseable.
 `.trim();
 
+
     const userPrompt = `
 Compare the following two items.
+
+Detail mode: ${detailMode}
 
 Item A:
 ${itemA}
@@ -95,6 +112,7 @@ ${criteriaText}
 
 ${toneInstruction}
 `.trim();
+
 
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
@@ -114,7 +132,7 @@ ${toneInstruction}
       );
     }
 
-    let parsed: ComparisonResult;
+        let parsed: ComparisonResult;
     try {
       parsed = JSON.parse(content) as ComparisonResult;
     } catch (err) {
@@ -128,7 +146,37 @@ ${toneInstruction}
       );
     }
 
-    return NextResponse.json(parsed);
+    // --- Log comparison to Supabase and capture the id ---
+    let comparisonId: string | null = null;
+
+    try {
+      const { data, error: insertError } = await supabaseServerClient
+        .from("comparisons")
+        .insert({
+          template: templateKey ?? null,
+          tone: tone ?? null,
+          criteria: criteria || null,
+          item_a: itemA,
+          item_b: itemB,
+          result: parsed,
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        console.error("Supabase insert error:", insertError);
+      } else if (data) {
+        comparisonId = data.id;
+      }
+    } catch (dbErr) {
+      console.error("Unexpected Supabase error:", dbErr);
+    }
+
+    return NextResponse.json({
+      result: parsed,
+      id: comparisonId,
+    });
+
   } catch (error) {
     console.error("Compare API error:", error);
     return NextResponse.json(
