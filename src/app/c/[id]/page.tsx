@@ -1,7 +1,3 @@
-// Make this route fully dynamic so metadata is evaluated per-request
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
-
 import type { Metadata } from "next";
 import { supabaseServerClient } from "@/lib/supabaseServer";
 
@@ -31,10 +27,6 @@ type ComparisonRow = {
   result: ComparisonResult;
 };
 
-type PageProps = {
-  params: { id: string };
-};
-
 const SITE_URL =
   (process.env.NEXT_PUBLIC_SITE_URL ?? "https://compareanything.co.nz").replace(
     /\/$/,
@@ -61,16 +53,15 @@ const genericMetadata: Metadata = {
   },
 };
 
-// ---------- METADATA (no Supabase, just ID-aware) ----------
+// IMPORTANT: canonical Next.js 16 signature
 export async function generateMetadata({
   params,
 }: {
   params: { id: string };
 }): Promise<Metadata> {
-  const id = params?.id;
+  const id = params.id;
 
-  // Extremely defensive: if something is wrong with the ID, still return valid tags
-  if (!id || id === "undefined") {
+  if (!id) {
     const url = `${SITE_URL}/c/invalid`;
     const title = "CompareAnything — Shared comparison link";
     const description =
@@ -121,15 +112,15 @@ export async function generateMetadata({
   };
 }
 
-// ---------- PAGE COMPONENT ----------
-export default async function ComparisonPage({ params }: PageProps) {
-  // 🚫 this used to be `await params` which is wrong
-  const { id } = params;
+// Also canonical signature for the page itself
+export default async function ComparisonPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const id = params.id;
 
-  console.log("Compare page params:", params);
-
-  // Guard against missing or bad ID
-  if (!id || id === "undefined") {
+  if (!id) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center px-4">
         <div className="w-full max-w-xl py-10 text-center">
@@ -147,7 +138,6 @@ export default async function ComparisonPage({ params }: PageProps) {
     );
   }
 
-  // Supabase lookup (same as you had before)
   const { data, error } = await supabaseServerClient
     .from("comparisons")
     .select("*")
