@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { supabaseServerClient } from "@/lib/supabaseServer";
 
 type ComparisonResult = {
@@ -31,15 +33,7 @@ type PageProps = {
 };
 
 import { Metadata } from "next";
-import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
-
-// we’ll use the anon key; read-only is fine for metadata
-function getSupabaseClient() {
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
 
 const SITE_URL =
   (process.env.NEXT_PUBLIC_SITE_URL ?? "https://compareanything.co.nz").replace(
@@ -67,17 +61,13 @@ const genericMetadata: Metadata = {
   },
 };
 
-export async function generateMetadata({
-  params,
-}: {
-  params: { id: string };
-}): Promise<Metadata> {
+export async function generateMetadata(
+  { params }: PageProps
+): Promise<Metadata> {
   const { id } = params;
 
   try {
-    const supabase = getSupabaseClient();
-
-    const { data, error } = await supabase
+    const { data, error } = await supabaseServerClient
       .from("comparisons")
       .select("item_a, item_b, result")
       .eq("id", id)
@@ -130,6 +120,7 @@ export async function generateMetadata({
     return genericMetadata;
   }
 }
+
 
 export default async function ComparisonPage({ params }: PageProps) {
   const { id } = await params;
