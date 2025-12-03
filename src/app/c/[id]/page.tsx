@@ -30,6 +30,107 @@ type PageProps = {
   params: { id: string };
 };
 
+import { Metadata } from "next";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
+
+// we’ll use the anon key; read-only is fine for metadata
+function getSupabaseClient() {
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+const SITE_URL =
+  (process.env.NEXT_PUBLIC_SITE_URL ?? "https://compareanything.co.nz").replace(
+    /\/$/,
+    ""
+  );
+
+const genericMetadata: Metadata = {
+  title: "CompareAnything — Smart, funny AI comparisons",
+  description:
+    "Paste two things, tell us what you care about, and CompareAnything will break it down with a bit of humour.",
+  openGraph: {
+    title: "CompareAnything — Smart, funny AI comparisons",
+    description:
+      "Paste two things, tell us what you care about, and CompareAnything will break it down with a bit of humour.",
+    url: SITE_URL,
+    siteName: "CompareAnything",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "CompareAnything — Smart, funny AI comparisons",
+    description:
+      "Paste two things, tell us what you care about, and CompareAnything will break it down with a bit of humour.",
+  },
+};
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string };
+}): Promise<Metadata> {
+  const { id } = params;
+
+  try {
+    const supabase = getSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("comparisons")
+      .select("item_a, item_b, result")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error || !data) {
+      return genericMetadata;
+    }
+
+    const itemA = data.item_a ?? "Thing A";
+    const itemB = data.item_b ?? "Thing B";
+
+    let summary: string | undefined;
+
+    try {
+      const parsed =
+        typeof data.result === "string" ? JSON.parse(data.result) : data.result;
+      if (parsed && typeof parsed.summary === "string") {
+        summary = parsed.summary;
+      }
+    } catch {
+      // ignore JSON parse errors, fall back to generic description
+    }
+
+    const title = `${itemA} vs ${itemB} — CompareAnything`;
+    const description =
+      summary ??
+      `Compare ${itemA} and ${itemB} side by side on what really matters.`;
+
+    const url = `${SITE_URL}/c/${id}`;
+
+    return {
+      ...genericMetadata,
+      title,
+      description,
+      openGraph: {
+        ...genericMetadata.openGraph,
+        title,
+        description,
+        url,
+        type: "article",
+      },
+      twitter: {
+        ...genericMetadata.twitter,
+        title,
+        description,
+      },
+    };
+  } catch {
+    return genericMetadata;
+  }
+}
+
 export default async function ComparisonPage({ params }: PageProps) {
   const { id } = await params;
 
