@@ -59,9 +59,12 @@ const genericMetadata: Metadata = {
   },
 };
 
+
 export async function generateMetadata(
   { params }: PageProps
 ): Promise<Metadata> {
+  console.log("GENERATE METADATA PARAMS:", params);
+
   const id = params?.id;
 
   // If something is wrong with the ID, just fall back safely
