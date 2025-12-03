@@ -1,6 +1,3 @@
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
-
 import { supabaseServerClient } from "@/lib/supabaseServer";
 
 type ComparisonResult = {
